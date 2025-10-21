@@ -150,7 +150,19 @@ def main_lightcurve_parser():
         
     else:
         print(f"[WARNING] Unsupported file extension: {extension}. Cannot plot.")
-        
+    
+    # After plotting and summary
+    if processed_df is not None:
+        # create output directory
+        output_dir = Path("output_csv")
+        output_dir.mkdir(exist_ok=True)
+
+        # standardize filename: same base name, .csv extension
+        csv_path = output_dir / (file_path.stem + "_processed.csv")
+        processed_df.to_csv(csv_path, index=False)
+
+        print(f"\n[SAVED] Processed data written to: {csv_path}")
+
     if processed_df is not None:
         print("\n[SUMMARY] Processed DataFrame (First 5 rows):")
         print(processed_df.head())
