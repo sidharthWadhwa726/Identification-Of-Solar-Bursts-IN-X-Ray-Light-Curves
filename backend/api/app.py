@@ -52,7 +52,7 @@ def analyze():
             temp_out_path = temp_out.name
 
         # Run main.py to get bursts CSV using subprocess
-        subprocess.run(['python', 'main.py', '--in', temp_csv_path, '--out', temp_out_path], check=True)
+        subprocess.run(['python', 'backend/main.py', '--in', temp_csv_path, '--out', temp_out_path], check=True)
 
         # Read bursts CSV
         bursts_df = pd.read_csv(temp_out_path)
