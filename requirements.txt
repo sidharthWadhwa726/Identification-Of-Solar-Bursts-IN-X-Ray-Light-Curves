@@ -3,3 +3,6 @@ matplotlib
 numpy
 pandas
 scipy
+flask
+flask-cors
+plotly

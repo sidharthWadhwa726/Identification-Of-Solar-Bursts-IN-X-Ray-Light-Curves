@@ -117,40 +117,73 @@ def plot_excel_lightcurve(file_path, time_column='TIME', rate_column='RATE', she
         return None
     
 
-# main function 
+def process_file_to_df(file_path):
+    """
+    Process a file to a pandas DataFrame based on its extension.
+    Supports .fits, .lc, .csv, .txt, .dat, .ascii, .xls, .xlsx.
+    Returns the processed DataFrame or None if failed.
+    """
+    file_path = Path(file_path)
+    if not file_path.exists():
+        raise FileNotFoundError(f"File not found at: {file_path}")
+
+    extension = file_path.suffix.lower()
+    processed_df = None
+
+    if extension in ['.fits', '.fit', '.fts']:
+        lc_table = convert_raw_fits_to_lc(file_path)
+        if lc_table is not None:
+            processed_df = lc_table.to_pandas()
+
+    elif extension in ['.lc']:
+        processed_df = process_fits_lightcurve(file_path)
+
+    elif extension in ['.csv', '.txt', '.dat', '.ascii']:
+        processed_df = plot_ascii_lightcurve(file_path)
+
+    elif extension in ['.xls', '.xlsx']:
+        processed_df = plot_excel_lightcurve(file_path)
+
+    else:
+        raise ValueError(f"Unsupported file extension: {extension}")
+
+    return processed_df
+
+
+# main function
 def main_lightcurve_parser():
-    
+
     file_path_str = input("Enter the full path to the light curve file (.lc, .fits, .csv, .xlsx, etc.): ")
     file_path = Path(file_path_str.strip().strip("'\"")) # Clean up path string
-    
+
     if not file_path.exists():
         print(f"\n[FAILURE] File not found at: {file_path_str}")
         return
 
     extension = file_path.suffix.lower()
     processed_df = None
-    
+
     print(f"\n[DISPATCHER] Analyzing file type: {extension}")
     print("-" * 50)
-    
+
     if extension in ['.fits', '.fit', '.fts']:
         lc_table = convert_raw_fits_to_lc(file_path)
         if lc_table is not None:
             processed_df = lc_table.to_pandas()
             _plot_and_display(processed_df, 'Time', 'RATE', file_path.name, "CONVERTED_LC")
-        
+
     elif extension in ['.lc']:
         processed_df = process_fits_lightcurve(file_path)
-        
+
     elif extension in ['.csv', '.txt', '.dat', '.ascii']:
         processed_df = plot_ascii_lightcurve(file_path)
-        
+
     elif extension in ['.xls', '.xlsx']:
         processed_df = plot_excel_lightcurve(file_path)
-        
+
     else:
         print(f"[WARNING] Unsupported file extension: {extension}. Cannot plot.")
-    
+
     # After plotting and summary
     if processed_df is not None:
         # create output directory
@@ -167,7 +200,7 @@ def main_lightcurve_parser():
         print("\n[SUMMARY] Processed DataFrame (First 5 rows):")
         print(processed_df.head())
         print(f"Total records: {len(processed_df)}")
-    
+
     print("-" * 50)
 
 
