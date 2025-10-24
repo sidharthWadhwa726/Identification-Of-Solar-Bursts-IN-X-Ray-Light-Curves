@@ -54,14 +54,24 @@ export default function Home() {
       {/* Supported Formats */}
       <section className="space-y-6">
         <h2 className="text-2xl font-semibold text-center">Supported Formats</h2>
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="text-center">
             <CardHeader>
               <CardTitle className="text-lg">FITS</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Flexible Image Transport System files commonly used in astronomy.
+                Flexible Image Transport System files commonly used in astronomy (.fits, .fit, .fts).
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardHeader>
+              <CardTitle className="text-lg">LC</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Light curve files in FITS format (.lc).
               </p>
             </CardContent>
           </Card>
@@ -71,7 +81,7 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Comma-separated values for time series data.
+                Comma-separated values for time series data (.csv).
               </p>
             </CardContent>
           </Card>
@@ -81,7 +91,47 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Plain text files with tabular data.
+                Plain text files with tabular data (.txt).
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardHeader>
+              <CardTitle className="text-lg">DAT</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Data files in ASCII format (.dat).
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardHeader>
+              <CardTitle className="text-lg">ASCII</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                ASCII tabular data files (.ascii).
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardHeader>
+              <CardTitle className="text-lg">XLS</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Microsoft Excel files (.xls).
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardHeader>
+              <CardTitle className="text-lg">XLSX</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Modern Microsoft Excel files (.xlsx).
               </p>
             </CardContent>
           </Card>

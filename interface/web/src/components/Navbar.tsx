@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -14,7 +15,13 @@ export default function Navbar() {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link href="/" className="text-xl font-bold">
-              Solar Burst ID
+              <Image 
+                width={150} 
+                height={150}
+                src="/logo_horizontal.png" 
+                alt="Logo" 
+                className="w-auto my-4 h-12"
+              />
             </Link>
           </div>
           <div className="flex items-center space-x-4">
