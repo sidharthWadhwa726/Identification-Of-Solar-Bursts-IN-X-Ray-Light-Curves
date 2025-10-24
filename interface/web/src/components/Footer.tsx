@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col md:flex-row justify-between items-center">
           <div className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Solar Burst Identification. Licensed under MIT.
+            © {new Date().getFullYear()} Solar Burst Identification. Licensed under GPLv3.
           </div>
           <div className="flex items-center space-x-4 mt-4 md:mt-0">
             <div className="flex space-x-4">
