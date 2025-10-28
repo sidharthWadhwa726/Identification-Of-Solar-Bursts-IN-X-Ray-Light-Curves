@@ -1,0 +1,9 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/env/bin/python",
+    "python.pythonPath": "${workspaceFolder}/env/bin/python",
+    "python.venvPath": "${workspaceFolder}/env",
+    "python.analysis.extraPaths": ["${workspaceFolder}"],
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true
+}

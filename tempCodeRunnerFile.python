@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+# detect_peaks_from_csv.py
+# Peak detection for solar X-ray light curves from a cleaned CSV (TIME,RATE).
+
+import argparse
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
+from scipy.ndimage import gaussian_filter1d
+
+# ---------- Utilities ----------
+
+def robust_sigma(y: np.ndarray) -> float:
+    """Robust noise estimate via MAD."""
+    y = np.asarray(y, float)
+    med = np.median(y)
+    mad = np.median(np.abs(y - med)) + 1e-12
+    return 1.4826 * mad
+
+def rolling_quantile(y: np.ndarray, win: int = 301, q: float = 0.2) -> np.ndarray:
+    """Low baseline via rolling quantile (edge-padded)."""
+    y = np.asarray(y, float)
+    win = int(max(5, win) | 1)
+    pad = win // 2
+    yp = np.pad(y, (pad, pad), mode="edge")
+    out = np.array([np.quantile(yp[i:i+win], q) for i in range(len(y))], float)
+    return out
+
+def detrend_and_smooth(t, y, baseline_win=301, baseline_q=0.2, smooth_sigma_bins=2.0):
+    base = rolling_quantile(y, win=baseline_win, q=baseline_q)
+    y_det = y - base
+    y_sm = gaussian_filter1d(y_det, sigma=max(1, int(round(smooth_sigma_bins))))
+    return base, y_det, y_sm
+
+def fwtm_end_indices(t, y_sm, base, pk_idx, frac=0.1):
+    """
+    Given peak index (on smoothed, detrended y), find start/end using
+    slope-walk on left and FWTM (10% of peak) on right.
+    Returns (i_start, i_end).
+    """
+    y_sm = np.asarray(y_sm, float)
+    dy = np.gradient(y_sm, edge_order=2)
+    i = int(pk_idx)
+
+    # left: walk back until derivative ~ non-positive (rise starts)
+    s = i
+    while s > 1 and dy[s-1] > 0:
+        s -= 1
+
+    # right: FWTM (10% of detrended peak amplitude)
+    amp = max(y_sm[i], 0.0)
+    level = frac * amp
+    e = i
+    while e < len(y_sm) - 1 and y_sm[e] >= level:
+        e += 1
+
+    return max(0, s), min(len(y_sm)-1, e)
+
+def merge_close(events, t, min_gap_s=30.0):
+    """Merge event intervals closer than min_gap_s."""
+    if not events: return []
+    events = sorted(events, key=lambda x: x[0])
+    merged = [list(events[0])]
+    for s, e, k in events[1:]:
+        if t[s] - t[merged[-1][1]] <= min_gap_s:
+            # extend last window and recompute peak inside
+            merged[-1][1] = max(merged[-1][1], e)
+            s0, e0 = merged[-1][0], merged[-1][1]
+            k_new = s0 + int(np.argmax(y_sm_global[s0:e0+1]))  # set by outer scope
+            merged[-1][2] = k_new
+        else:
+            merged.append([s, e, k])
+    return [tuple(m) for m in merged]
+
+# ---------- Core detection ----------
+
+def detect_peaks(
+    t: np.ndarray,
+    y: np.ndarray,
+    baseline_win: int = 301,
+    baseline_q: float = 0.2,
+    smooth_sigma_bins: float = 2.0,
+    min_prom_snr: float = 4.0,
+    min_distance_s: float = 60.0,
+    min_duration_s: float = 30.0,
+    merge_gap_s: float = 30.0,
+):
+    """
+    Returns:
+      events_df: DataFrame with t_start, t_peak, t_end, amp, snr, duration, i_start, i_peak, i_end
+      base, y_det, y_sm: arrays for plotting
+    """
+    global y_sm_global
+    t = np.asarray(t, float)
+    y = np.asarray(y, float)
+
+    base, y_det, y_sm = detrend_and_smooth(t, y, baseline_win, baseline_q, smooth_sigma_bins)
+    y_sm_global = y_sm  # for merge_close peak recompute
+
+    sig = robust_sigma(y_sm)
+    prom = max(min_prom_snr * sig, 1e-12)
+    # convert min_distance from seconds to samples using median dt
+    dt = np.median(np.diff(t)) if len(t) > 1 else 1.0
+    distance_bins = max(1, int(round(min_distance_s / max(dt, 1e-9))))
+
+    pk_idx, props = find_peaks(y_sm, prominence=prom, distance=distance_bins)
+
+    events = []
+    for k in pk_idx:
+        s, e = fwtm_end_indices(t, y_sm, base, k, frac=0.1)
+        if (t[e] - t[s]) >= min_duration_s:
+            events.append((s, e, int(k)))
+
+    # Merge close intervals and re-pick peak per interval
+    merged = merge_close(events, t, min_gap_s=merge_gap_s)
+
+    rows = []
+    noise = robust_sigma(y_sm) + 1e-12
+    for s, e, k in merged:
+        amp = float(y_sm[k])                 # detrended peak amplitude
+        snr = float(amp / noise)
+        rows.append(dict(
+            t_start=float(t[s]),
+            t_peak=float(t[k]),
+            t_end=float(t[e]),
+            amp=amp,
+            snr=snr,
+            duration=float(t[e] - t[s]),
+            i_start=int(s), i_peak=int(k), i_end=int(e),
+        ))
+    events_df = pd.DataFrame(rows).sort_values("t_peak").reset_index(drop=True)
+    return events_df, base, y_det, y_sm
+
+# ---------- Plot ----------
+
+def plot_detection(t, y, base, y_sm, events_df, title="Detected peaks"):
+    plt.figure(figsize=(12, 5))
+    plt.plot(t, y, lw=0.8, label="RATE")
+    plt.plot(t, base, lw=1.2, label="baseline (quantile)")
+    plt.plot(t, y_sm + base, lw=1.0, label="smoothed (baseline+)")
+    for _, r in events_df.iterrows():
+        plt.axvspan(r.t_start, r.t_end, alpha=0.12)
+        plt.plot([r.t_peak], [y[int(r.i_peak)]], "o")
+    plt.xlabel("Time (s)"); plt.ylabel("Counts/s")
+    plt.title(title); plt.grid(True); plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+# ---------- CSV IO ----------
+
+def read_lc_csv(path: Path):
+    df = pd.read_csv(path)
+    cols = {c.upper(): c for c in df.columns}
+    tcol = cols.get("TIME") or cols.get("T")
+    ycol = cols.get("RATE") or cols.get("FLUX") or cols.get("Y")
+    if tcol is None or ycol is None:
+        raise KeyError("CSV must contain TIME and RATE (or FLUX) columns.")
+    t = df[tcol].to_numpy(dtype=float)
+    y = df[ycol].to_numpy(dtype=float)
+    return t, y
+
+def write_events_csv(events_df: pd.DataFrame, out_path: Path):
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    events_df.to_csv(out_path, index=False)
+
+# ---------- CLI ----------
+
+def main():
+    ap = argparse.ArgumentParser(description="Peak detection on cleaned light-curve CSV (TIME,RATE).")
+    ap.add_argument("--in", dest="in_csv", required=True, help="Input CSV with TIME,RATE")
+    ap.add_argument("--out", dest="out_csv", default="", help="Output events CSV (default: <in>_events.csv)")
+    ap.add_argument("--plot", action="store_true", help="Show plot with shaded events")
+    ap.add_argument("--baseline-win", type=int, default=301, help="Rolling-quantile window (odd)")
+    ap.add_argument("--baseline-q", type=float, default=0.2, help="Quantile for baseline (0..1)")
+    ap.add_argument("--smooth-sigma-bins", type=float, default=2.0, help="Gaussian smoothing sigma (bins)")
+    ap.add_argument("--min-prom-snr", type=float, default=4.0, help="Peak prominence in units of robust sigma")
+    ap.add_argument("--min-distance-s", type=float, default=60.0, help="Min separation between peaks (seconds)")
+    ap.add_argument("--min-duration-s", type=float, default=30.0, help="Min event duration (seconds)")
+    ap.add_argument("--merge-gap-s", type=float, default=30.0, help="Merge events closer than this (seconds)")
+    args = ap.parse_args()
+
+    in_csv = Path(args.in_csv)
+    out_csv = Path(args.out_csv) if args.out_csv else in_csv.with_name(in_csv.stem + "_events.csv")
+
+    t, y = read_lc_csv(in_csv)
+    events_df, base, y_det, y_sm = detect_peaks(
+        t, y,
+        baseline_win=args.baseline_win,
+        baseline_q=args.baseline_q,
+        smooth_sigma_bins=args.smooth_sigma_bins,
+        min_prom_snr=args.min_prom_snr,
+        min_distance_s=args.min_distance_s,
+        min_duration_s=args.min_duration_s,
+        merge_gap_s=args.merge_gap_s,
+    )
+    write_events_csv(events_df, out_csv)
+    print(f"[OK] {len(events_df)} events → {out_csv}")
+
+    if args.plot:
+        plot_detection(t, y, base, y_sm, events_df, title=in_csv.name)
+
+if __name__ == "__main__":
+    main()
