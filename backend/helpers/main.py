@@ -14,6 +14,9 @@ from .detect.indices import nearest_indices
 from .viz.efp_plots import plot_efp_on_selected_peaks
 from .viz.plots import final_overlay
 
+# NEW: autoencoder scoring
+from .post.anomaly import score_with_autoencoder
+
 warnings.filterwarnings("ignore", category=UnitsWarning)  # silence 'counts/s' unit warning
 
 
@@ -49,6 +52,12 @@ def build_argparser():
 
     # debug dumps
     ap.add_argument("--write-debug", action="store_true", help="Write raw/filtered catalogs to CSV")
+
+    # NEW: AE anomaly scoring switches
+    ap.add_argument("--ae-artifacts", type=str, default=None,
+                    help="Folder with autoencoder artifacts (enable AE scoring if provided)")
+    ap.add_argument("--ae-output", type=str, default=None,
+                    help="Path to write AE-scored catalog CSV (optional)")
     return ap
 
 
@@ -93,6 +102,21 @@ def main():
         print(f"[OK] wrote flare_catalog_raw.csv ({len(df_fitted)} rows)")
         print(f"[OK] wrote flare_catalog_filtered.csv ({len(filtered)} rows)")
 
+    # -------------- AE ANOMALY SCORING (optional) --------------
+    if args.ae_artifacts:
+        try:
+            scored = score_with_autoencoder(filtered if not filtered.empty else df_fitted,
+                                            artifacts_dir=args.ae_artifacts)
+            if args.ae_output:
+                scored.to_csv(args.ae_output, index=False)
+                print(f"[OK] wrote AE-scored catalog → {args.ae_output} "
+                      f"({len(scored)} rows; anomalies={int(scored.get('anomaly', pd.Series([],dtype=int)).sum())})")
+            else:
+                if "anomaly" in scored.columns:
+                    print(f"[AE] anomalies: {int(scored['anomaly'].sum())}/{len(scored)}")
+        except Exception as e:
+            print(f"[AE] Skipping AE scoring: {e}")
+
     # -------------- FINAL OVERLAY PLOT --------------
     if args.plot:
         cat_for_plot = filtered if not filtered.empty else df_fitted
@@ -101,23 +125,20 @@ def main():
             y,
             cat_for_plot,
             bg=bg,
-            show_bg=False,
+            show_bg=False,                 # you were plotting BG-subtracted signal; set True if you want green BG line
             show_raw=False,
-            include_bg_in_signal=True
+            include_bg_in_signal=True      # keep behavior you used earlier
         )
 
     # -------------- PER-PEAK PLOTS (optional) --------------
     if args.plot_efp:
-        # choose set to visualize: filtered if non-empty, else raw
         cat_vis = filtered if not filtered.empty else df_fitted
         if not cat_vis.empty:
-            # top-K by SNR if requested
             if args.topk and "FittedSNR" in cat_vis.columns:
                 cat_vis = cat_vis.sort_values("FittedSNR", ascending=False).head(args.topk)
             elif args.topk:
                 cat_vis = cat_vis.head(args.topk)
 
-            # robust time column
             time_col = "PeakTime" if "PeakTime" in cat_vis.columns else cat_vis.columns[0]
             peak_times = cat_vis[time_col].astype(float).values
             peak_idx = nearest_indices(t, peak_times)
