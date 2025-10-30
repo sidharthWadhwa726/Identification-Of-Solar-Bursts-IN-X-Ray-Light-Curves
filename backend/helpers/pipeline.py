@@ -12,7 +12,6 @@ from .detect.merge import merge_intervals
 from .preprocess.background import estimate_background
 from .detect.clip import mad_clip
 from .models.fitting import efp_fit_catalog
-from .viz.plots import final_overlay
 
 
 def full_analysis_no_stitching(path: str, cfg: Config = Config(), do_plot: bool = True):
@@ -66,8 +65,5 @@ def full_analysis_no_stitching(path: str, cfg: Config = Config(), do_plot: bool 
     if isinstance(cat, pd.DataFrame) and not cat.empty:
         if "PeakFlux_nW_m2" in cat.columns and "PeakFlux_nW/m2" not in cat.columns:
             cat = cat.rename(columns={"PeakFlux_nW_m2": "PeakFlux_nW/m2"})
-
-    if do_plot and isinstance(cat, pd.DataFrame):
-        final_overlay(t_bin, sub_clip, cat)
 
     return t_bin, sub_clip, cat, bg

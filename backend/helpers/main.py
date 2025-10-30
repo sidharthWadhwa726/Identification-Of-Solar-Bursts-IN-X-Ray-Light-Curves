@@ -12,6 +12,7 @@ from .pipeline import full_analysis_no_stitching
 from .post.filters import filter_flare_catalog
 from .detect.indices import nearest_indices
 from .viz.efp_plots import plot_efp_on_selected_peaks
+from .viz.plots import final_overlay
 
 warnings.filterwarnings("ignore", category=UnitsWarning)  # silence 'counts/s' unit warning
 
@@ -91,6 +92,19 @@ def main():
         filtered.to_csv("flare_catalog_filtered.csv", index=False)
         print(f"[OK] wrote flare_catalog_raw.csv ({len(df_fitted)} rows)")
         print(f"[OK] wrote flare_catalog_filtered.csv ({len(filtered)} rows)")
+
+    # -------------- FINAL OVERLAY PLOT --------------
+    if args.plot:
+        cat_for_plot = filtered if not filtered.empty else df_fitted
+        final_overlay(
+            t,
+            y,
+            cat_for_plot,
+            bg=bg,
+            show_bg=False,
+            show_raw=False,
+            include_bg_in_signal=True
+        )
 
     # -------------- PER-PEAK PLOTS (optional) --------------
     if args.plot_efp:
