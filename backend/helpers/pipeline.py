@@ -20,7 +20,7 @@ def full_analysis_no_stitching(path: str, cfg: Config = Config(), do_plot: bool 
       0) loads LC
       1) bins/interpolates/smooths
       2) detects initial peaks
-      3-4) builds/merges durations
+      3–4) builds/merges durations
       5) estimates background
       6) subtracts & MAD-clips
       7) fits EFP and builds catalog
@@ -28,7 +28,7 @@ def full_analysis_no_stitching(path: str, cfg: Config = Config(), do_plot: bool 
     Returns:
         t_bin (np.ndarray): binned time
         sub_clip (np.ndarray): background-subtracted (and clipped) signal
-        cat (pd.DataFrame): EFP-fitted catalog (columns normalized)
+        cat (pd.DataFrame): EFP-fitted catalog
         bg (np.ndarray): estimated background (len == len(t_bin))
     """
     # Step 0: load
@@ -51,7 +51,7 @@ def full_analysis_no_stitching(path: str, cfg: Config = Config(), do_plot: bool 
 
     # Step 6: subtract + clip
     sub = np.maximum(0.0, r_bin - bg)
-    sub_clip, thr = mad_clip(sub, cfg.clip.n_sigma_clip)
+    sub_clip, _thr = mad_clip(sub, cfg.clip.n_sigma_clip)
 
     # Step 7: EFP fit on clipped (bg used inside for SNR calc)
     cat = efp_fit_catalog(

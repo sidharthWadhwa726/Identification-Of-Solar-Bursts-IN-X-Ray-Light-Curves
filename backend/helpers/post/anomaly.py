@@ -6,10 +6,11 @@ import pickle
 import numpy as np
 import pandas as pd
 import torch
-
+# Make sure the class is importable under its original module path
+from .train_autoencoder import StandardScaler
 # IMPORTANT: import the module that DEFINES the classes used in the pickles
 # so unpickling can resolve e.g. train_autoencoder.StandardScaler
-from backend.helpers.train_autoencoder import (
+from .train_autoencoder import (
     canonicalize,
     feature_engineering,
     AutoEncoder,
