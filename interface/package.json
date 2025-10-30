@@ -1,0 +1,20 @@
+{
+  "name": "next-electron-app",
+  "version": "1.0.0",
+  "description": "Next.js app wrapped in Electron",
+  "main": "main.js",
+  "scripts": {
+    "dev": "cd web && npm run dev",
+    "build": "cd web && npm run build",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "next": "^15.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}
+
