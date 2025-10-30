@@ -6,12 +6,6 @@ import FileUpload from "./FileUpload";
 interface AnalysisFormProps {
   file: File | null;
   setFile: (file: File | null) => void;
-  threshold: string;
-  setThreshold: (value: string) => void;
-  backgroundWindow: string;
-  setBackgroundWindow: (value: string) => void;
-  modelType: string;
-  setModelType: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   isPending: boolean;
   clearSession: () => void;

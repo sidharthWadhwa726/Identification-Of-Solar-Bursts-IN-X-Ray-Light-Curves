@@ -3,101 +3,75 @@ from flask_cors import CORS
 import tempfile
 import os
 import pandas as pd
+
 from pathlib import Path
 import sys
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-
-# Add the project root to sys.path to import backend modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from backend.main_input_parser import process_file_to_df
-# Import main.py functions directly to avoid module issues
-# from backend.main import main as run_main
-import subprocess
+from backend.helpers.pipeline import full_analysis_no_stitching
+from backend.helpers.config import Config
+from backend.helpers.post.filters import filter_flare_catalog
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+
+CORS(app)  # Enable CORS for frontend
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+        return jsonify({'error': 'No file provided'}), 400
 
     file = request.files['file']
     if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+        return jsonify({'error': 'No file selected'}), 400
 
     # Save uploaded file to temp
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as temp_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
         file.save(temp_file.name)
         temp_path = temp_file.name
 
     try:
-        # Process file to DataFrame
-        df = process_file_to_df(temp_path)
-        if df is None:
-            return jsonify({'error': 'Failed to process file'}), 400
+        # Use default config
+        cfg = Config()
 
-        # Convert to CSV string
-        input_csv = df.to_csv(index=False)
+        # Run pipeline
+        t, y, cat, bg = full_analysis_no_stitching(temp_path, cfg, do_plot=False)
 
-        # Save to temp CSV for main.py
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as temp_csv:
-            df.to_csv(temp_csv, index=False)
-            temp_csv_path = temp_csv.name
-
-        # Run main.py to get bursts CSV using subprocess
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as temp_out:
-            temp_out_path = temp_out.name
-
-        # Run main.py to get bursts CSV using subprocess
-        subprocess.run(['python', 'backend/main.py', '--in', temp_csv_path, '--out', temp_out_path], check=True)
-
-        # Read bursts CSV
-        bursts_df = pd.read_csv(temp_out_path)
-        bursts_csv = bursts_df.to_csv(index=False)
-
-        # Generate Plotly plot
-        fig = make_subplots(rows=1, cols=1)
-
-        # Add light curve
-        fig.add_trace(go.Scatter(x=df.iloc[:, 0], y=df.iloc[:, 1], mode='lines', name='Light Curve', line=dict(color='blue')))
-
-        # Add burst regions
-        for _, burst in bursts_df.iterrows():
-            fig.add_vrect(
-                x0=burst['t_start'], x1=burst['t_end'],
-                fillcolor="red", opacity=0.7, layer="below", line_width=1,
-                annotation_text=f"Burst {burst.name+1}", annotation_position="top left"
-            )
-
-        fig.update_layout(
-            title='X-ray Light Curve Analysis',
-            xaxis_title='Time (s)',
-            yaxis_title='Flux (counts/s)',
-            margin=dict(l=20, r=20, t=50, b=20),  # Reduced empty space around the plot
+        # Post-filter
+        df_fitted = cat.copy() if isinstance(cat, pd.DataFrame) else pd.DataFrame()
+        filtered, _ = filter_flare_catalog(
+            df_fitted,
+            thresholds={
+                "snr_min": 8.0,
+                "r2_min": 0.5,
+                "decay_tau_max": 1.0e7
+            },
+            adaptive=True,
+            min_keep=5
         )
 
-        # Convert to dict for JSON serialization
-        plot_data = fig.to_dict()
+        # Create plot_df CSV: time, flux, background
+        plot_df = pd.DataFrame({
+            'time': t,
+            'flux': y,
+            'background': bg
+        })
+        plot_csv = plot_df.to_csv(index=False)
+
+        # Create bursts_csv: filtered catalog
+        bursts_csv = filtered.to_csv(index=False) if not filtered.empty else ""
 
         return jsonify({
-            'bursts_csv': bursts_csv,
-            'plot_data': plot_data,
+            'plot_df': plot_csv,
+            'bursts_csv': bursts_csv
         })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
     finally:
-        # Clean up temp files
+        # Clean up temp file
         if os.path.exists(temp_path):
             os.unlink(temp_path)
-        if 'temp_csv_path' in locals() and os.path.exists(temp_csv_path):
-            os.unlink(temp_csv_path)
-        if 'temp_out_path' in locals() and os.path.exists(temp_out_path):
-            os.unlink(temp_out_path)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)

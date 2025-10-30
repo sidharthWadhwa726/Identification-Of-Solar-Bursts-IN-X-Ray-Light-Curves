@@ -8,9 +8,6 @@ import { AnalysisResult } from "@/lib/analysis";
 
 export default function AnalyzePage() {
   const [file, setFile] = useState<File | null>(null);
-  const [threshold, setThreshold] = useState("3.0");
-  const [backgroundWindow, setBackgroundWindow] = useState("100");
-  const [modelType, setModelType] = useState("exponential");
   const [results, setResults] = useState<AnalysisResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -38,27 +35,110 @@ export default function AnalyzePage() {
 
       // Parse bursts CSV
       const burstLines = responseData.bursts_csv.split('\n').filter((line: string) => line.trim());
-      const burstHeaders = burstLines[0].split(',').map((h: string) => h.trim());
-      const detectedBursts = burstLines.slice(1).map((line: string) => {
-        const values = line.split(',').map((v: string) => v.trim());
+      let detectedBursts: any[] = [];
+      if (burstLines.length >= 2) {
+        const burstHeaders = burstLines[0].split(',').map((h: string) => h.trim());
+        detectedBursts = burstLines.slice(1).map((line: string) => {
+          const values = line.split(',').map((v: string) => v.trim());
+          const data: any = {};
+          burstHeaders.forEach((header: string, index: number) => {
+            data[header] = parseFloat(values[index]) || values[index];
+          });
+          return {
+            t_start: data.StartFWTM,
+            t_end: data.EndFWTM,
+            F0: data.PeakFlux,
+            A: data.Fitted_A,
+            t0: data.PeakTime,
+            tau_r: data.RiseSigma,
+            tau_d: data.DecayTau,
+            F_peak: data.PeakFlux,
+            t_peak: data.PeakTime,
+            duration: data.EndFWTM - data.StartFWTM,
+          };
+        }).filter((burst: any) => !isNaN(burst.t_start));
+      }
+
+      // Parse plot CSV
+      const plotLines = responseData.plot_df.split('\n').filter((line: string) => line.trim());
+      const plotHeaders = plotLines[0].split(',').map((h: string) => h.trim());
+      const plotDataArray = plotLines.slice(1).map((line: string) => {
+        const values = line.split(',').map((v: string) => parseFloat(v.trim()));
         return {
-          t_start: parseFloat(values[0]),
-          t_end: parseFloat(values[1]),
-          F0: parseFloat(values[2]),
-          A: parseFloat(values[3]),
-          t0: parseFloat(values[4]),
-          tau_r: parseFloat(values[5]),
-          tau_d: parseFloat(values[6]),
-          F_peak: parseFloat(values[7]),
-          t_peak: parseFloat(values[8]),
-          duration: parseFloat(values[9]),
+          time: values[0],
+          flux: values[1],
+          background: values[2],
         };
-      }).filter((burst: any) => !isNaN(burst.t_start));
+      }).filter((d: any) => !isNaN(d.time));
+
+      // Calculate total flux
+      const totalFlux = plotDataArray.map((d: any) => d.flux + d.background);
+      const yMin = Math.min(...totalFlux);
+      const yMax = Math.max(...totalFlux);
+
+      // Create shapes for bursts: vertical lines at t_peak
+      const shapes = detectedBursts.map((burst: any) => ({
+        type: 'line',
+        x0: burst.t_peak,
+        y0: yMin,
+        x1: burst.t_peak,
+        y1: yMax,
+        line: { color: '#ff000035', width: 3 },
+      }));
+
+      // Annotations for '*' at start and end times on the curve
+      const annotations: any[] = [];
+      detectedBursts.forEach((burst: any) => {
+        // Find closest index for t_start
+        const startIdx = plotDataArray.reduce((prev: number, curr: any, idx: number) =>
+          Math.abs(curr.time - burst.t_start) < Math.abs(plotDataArray[prev].time - burst.t_start) ? idx : prev, 0);
+        annotations.push({
+          x: burst.t_start,
+          y: totalFlux[startIdx],
+          xref: 'x',
+          yref: 'y',
+          text: '*',
+          showarrow: false,
+          font: { color: 'red', size: 14 },
+        });
+
+        // Find closest index for t_end
+        const endIdx = plotDataArray.reduce((prev: number, curr: any, idx: number) =>
+          Math.abs(curr.time - burst.t_end) < Math.abs(plotDataArray[prev].time - burst.t_end) ? idx : prev, 0);
+        annotations.push({
+          x: burst.t_end,
+          y: totalFlux[endIdx],
+          xref: 'x',
+          yref: 'y',
+          text: '*',
+          showarrow: false,
+          font: { color: 'red', size: 14 },
+        });
+      });
+
+      const plotData = {
+        data: [
+          {
+            x: plotDataArray.map((d: any) => d.time),
+            y: totalFlux,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Flux',
+          },
+        ],
+        layout: {
+          title: 'X-ray Light Curve',
+          xaxis: { title: 'Time (s)' },
+          yaxis: { title: 'Flux (counts/s)' },
+          shapes: shapes,
+          annotations: annotations,
+        },
+      };
 
       const newResult: AnalysisResult = {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
-        plotData: responseData.plot_data,
+        plotData,
         detectedBursts,
       };
       setResults((prev) => [newResult, ...prev]);
@@ -100,12 +180,6 @@ export default function AnalyzePage() {
             <AnalysisForm
               file={file}
               setFile={setFile}
-              threshold={threshold}
-              setThreshold={setThreshold}
-              backgroundWindow={backgroundWindow}
-              setBackgroundWindow={setBackgroundWindow}
-              modelType={modelType}
-              setModelType={setModelType}
               onSubmit={handleSubmit}
               isPending={isLoading}
               clearSession={clearSession}

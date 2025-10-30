@@ -1,7 +1,10 @@
 export interface AnalysisResult {
   id: string;
   timestamp: string;
-  plotData: any;
+  plotData: {
+    data: any[];
+    layout: any;
+  };
   detectedBursts: Array<{
     t_start: number;
     t_end: number;
@@ -26,9 +29,7 @@ export const handleDrop = (
 ) => {
   e.preventDefault();
   const droppedFile = e.dataTransfer.files[0];
-  if (droppedFile && (droppedFile.name.endsWith('.csv') || droppedFile.name.endsWith('.txt') || droppedFile.name.endsWith('.fits'))) {
-    setFile(droppedFile);
-  }
+  setFile(droppedFile);
 };
 
 export const handleFileSelect = (
@@ -53,10 +54,10 @@ export const removeFile = (
 
 export const downloadResult = (result: AnalysisResult) => {
   const csvContent = result.detectedBursts.map(burst =>
-    `${result.timestamp},${burst.t_start},${burst.t_peak},${burst.t_end},${burst.F_peak},${burst.A}`
+    `${result.timestamp},${burst.t_start},${burst.t_peak},${burst.t_end},${burst.F_peak},${burst.A},${burst.tau_r},${burst.tau_d},${burst.duration}`
   ).join("\n");
 
-  const blob = new Blob([`timestamp,t_start,t_peak,t_end,F_peak,A\n${csvContent}`], { type: "text/csv" });
+  const blob = new Blob([`timestamp,t_start,t_peak,t_end,F_peak,A,tau_r,tau_d,duration\n${csvContent}`], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
